@@ -35,10 +35,10 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
   ReceivePort? backgroundPort;
   bool messageFromIsolate = false;
 
-  /// SG: the ZIM login started in handle(). The ring now shows before this
-  /// finishes, so answer/decline wait for it: a fast tap would otherwise
-  /// reach ZIM while logged out, fail, and lose the call.
-  Future<void>? _signalingReady;
+  /// SG: completes once ZIM is logged in for the current call. The ring now
+  /// shows before that login, so Answer and Decline wait on it: a fast tap
+  /// used to reach ZIM while logged out, fail, and lose the call.
+  Completer<void>? _signalingReady;
 
   void init({required ReceivePort? port, required bool messageFromIsolate}) {
     ZegoLoggerService.logInfo(
@@ -86,6 +86,8 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
       // SG: set the call up and ring first, then log in to ZIM. The login
       // used to come first, and in doze it can take minutes, so the phone
       // rang late or after the caller had already hung up.
+      final signalingReady = Completer<void>();
+      _signalingReady = signalingReady;
       final signalingSubscriptions = <StreamSubscription<dynamic>>[];
       await _handleMessage(
         message: message,
@@ -94,17 +96,18 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
         signalingSubscriptions: signalingSubscriptions,
       );
 
-      if (signalingPluginNeedInstalled.value) {
-        _signalingReady = _installSignalingPlugin(
-          message: message,
-          appSign: appSign,
-        );
-        await _signalingReady;
-      }
-      _listenSignalingEvents(signalingSubscriptions, message: message);
+      try {
+        if (signalingPluginNeedInstalled.value) {
+          await _installSignalingPlugin(message: message, appSign: appSign);
+        }
+        _listenSignalingEvents(signalingSubscriptions, message: message);
 
-      if (messageFromIsolate) {
-        await _reLogin(message.handlerInfo);
+        if (messageFromIsolate) {
+          await _reLogin(message.handlerInfo);
+        }
+      } finally {
+        // Even if the login failed, let a waiting tap go on and report it.
+        signalingReady.complete();
       }
     }
   }
@@ -140,8 +143,7 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
   Future<void> _refuseCallInvitation({
     required ZegoCallAndroidCallBackgroundMessageHandlerMessage message,
   }) async {
-    await _signalingReady; // SG: see _signalingReady
-
+    await _signalingReady?.future;
     await ZegoUIKitCallCache().offlineCallKit.clearCacheParams();
     await ZegoUIKitCallCache().offlineCallKit.clearCallID();
 
@@ -179,8 +181,7 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
     required String appSign,
     required String callID,
   }) async {
-    await _signalingReady; // SG: see _signalingReady
-
+    await _signalingReady?.future;
     ZegoLoggerService.logInfo(
       'accept, ',
       tag: 'call-invitation',
