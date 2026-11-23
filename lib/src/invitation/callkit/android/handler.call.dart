@@ -78,15 +78,25 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
         tag: 'call-invitation',
         subTag: 'offline, call handler',
       );
-      if (signalingPluginNeedInstalled.value) {
-        await _installSignalingPlugin(message: message, appSign: appSign);
-      }
-
+      // SG: set the call up and ring first, then log in to ZIM. The login
+      // used to come first, and in doze it can take minutes, so the phone
+      // rang late or after the caller had already hung up.
+      final signalingSubscriptions = <StreamSubscription<dynamic>>[];
       await _handleMessage(
         message: message,
         appSign: appSign,
         signalingPluginInstalled: signalingPluginNeedInstalled,
+        signalingSubscriptions: signalingSubscriptions,
       );
+
+      if (signalingPluginNeedInstalled.value) {
+        await _installSignalingPlugin(message: message, appSign: appSign);
+      }
+      _listenSignalingEvents(signalingSubscriptions, message: message);
+
+      if (messageFromIsolate) {
+        await _reLogin(message.handlerInfo);
+      }
     }
   }
 
@@ -254,6 +264,7 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
     required ZegoCallAndroidCallBackgroundMessageHandlerMessage message,
     required String appSign,
     required ValueNotifier<bool> signalingPluginInstalled,
+    required List<StreamSubscription<dynamic>> signalingSubscriptions,
   }) async {
     message.parseCallInvitationInfo();
 
@@ -277,7 +288,6 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
       subTag: 'offline, call handler',
     );
 
-    final signalingSubscriptions = <StreamSubscription<dynamic>>[];
     _listenFlutterCallkitIncomingEvent(
       message: message,
       signalingPluginNeedUninstalled: signalingPluginInstalled,
@@ -285,7 +295,6 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
       appSign: appSign,
       callSendRequestProtocol: callSendRequestProtocol,
     );
-    _listenSignalingEvents(signalingSubscriptions, message: message);
 
     /// cache and check when app run
     await ZegoUIKitCallCache().offlineCallKit.setCallID(
@@ -299,17 +308,18 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
         callID: callSendRequestProtocol.callID,
         callType: message.callType,
         payloadData: message.customData,
-        timeoutSeconds: 60,
+        // SG: the invite's own ring window (40 s from the CRM), not a fixed
+        // 60 s, so the startup replay never outlives the real call.
+        timeoutSeconds: callSendRequestProtocol.timeout,
         accept: false,
         requiredInviter: message.handlerInfo?.requiredInviter,
       ),
     );
 
-    if (messageFromIsolate) {
-      /// the app is in the background or locked, brought to the foreground and prompt the user to unlock it
-      await ZegoUIKit().activeAppToForeground();
-      await ZegoUIKit().requestDismissKeyguard();
-    } else {
+    // SG: a live app gets the call through ZIM after _reLogin (see handle()).
+    // It used to try opening the app from here, which Android 10+ blocks,
+    // so nothing rang until ZIM reconnected on its own.
+    if (!messageFromIsolate) {
       final handlerInfoJson = await getPreferenceString(
         serializationKeyHandlerInfo,
       );
@@ -408,7 +418,7 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
               callID: callSendRequestProtocol.callID,
               callType: message.callType,
               payloadData: message.customData,
-              timeoutSeconds: 60,
+              timeoutSeconds: callSendRequestProtocol.timeout,
               accept: true,
               requiredInviter: message.handlerInfo?.requiredInviter,
             ),
@@ -659,6 +669,26 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
     final callID =
         dataMap[ZegoCallInvitationProtocolKey.callID] as String? ?? '';
     await _cancelCallInvitation(callID);
+  }
+
+  /// SG: the app is alive, but ZIM lost its connection while the phone slept,
+  /// which is why this call came as a push. Log in again now, while the push
+  /// keeps the phone awake: ZIM then delivers the invitation and the page
+  /// manager rings the normal way. Same steps as plugins.dart tryReLogin.
+  Future<void> _reLogin(HandlerPrivateInfo? info) async {
+    if (info == null) return;
+
+    ZegoLoggerService.logInfo(
+      're-login to receive the call, id:${info.userID}',
+      tag: 'call-invitation',
+      subTag: 'offline, call handler',
+    );
+    await ZegoUIKit().getSignalingPlugin().logout();
+    await ZegoUIKit().getSignalingPlugin().login(
+      id: info.userID,
+      name: info.userName,
+      token: info.token,
+    );
   }
 
   Future<void> _installSignalingPlugin({
