@@ -1,3 +1,7 @@
+## 4.24.7
+
+- Update dependency
+
 ## 4.24.6
 
 - Add iOS Swift Package Manager support while retaining CocoaPods support.
