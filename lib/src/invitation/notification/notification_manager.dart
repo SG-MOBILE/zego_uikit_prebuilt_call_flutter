@@ -460,7 +460,7 @@ class ZegoCallInvitationNotificationManager {
     return await hasSystemAlertWindowPermission().then((
       bool hasPermission,
     ) async {
-      if (!hasPermission) {
+      if (!hasPermission && !(await Permission.notification.isGranted)) {
         ZegoLoggerService.logWarn(
           'show invitation notification, '
           'check permission done, '
