@@ -35,6 +35,11 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
   ReceivePort? backgroundPort;
   bool messageFromIsolate = false;
 
+  /// SG: the ZIM login started in handle(). The ring now shows before this
+  /// finishes, so answer/decline wait for it: a fast tap would otherwise
+  /// reach ZIM while logged out, fail, and lose the call.
+  Future<void>? _signalingReady;
+
   void init({required ReceivePort? port, required bool messageFromIsolate}) {
     ZegoLoggerService.logInfo(
       'init, '
@@ -90,7 +95,11 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
       );
 
       if (signalingPluginNeedInstalled.value) {
-        await _installSignalingPlugin(message: message, appSign: appSign);
+        _signalingReady = _installSignalingPlugin(
+          message: message,
+          appSign: appSign,
+        );
+        await _signalingReady;
       }
       _listenSignalingEvents(signalingSubscriptions, message: message);
 
@@ -131,6 +140,8 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
   Future<void> _refuseCallInvitation({
     required ZegoCallAndroidCallBackgroundMessageHandlerMessage message,
   }) async {
+    await _signalingReady; // SG: see _signalingReady
+
     await ZegoUIKitCallCache().offlineCallKit.clearCacheParams();
     await ZegoUIKitCallCache().offlineCallKit.clearCallID();
 
@@ -168,6 +179,8 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
     required String appSign,
     required String callID,
   }) async {
+    await _signalingReady; // SG: see _signalingReady
+
     ZegoLoggerService.logInfo(
       'accept, ',
       tag: 'call-invitation',
