@@ -605,16 +605,25 @@ class ZegoCallInvitationServicePrivateImpl
                 return;
               }
 
-              // SG: only replay a call still inside its ring window. Older
-              // entries are left over from calls that ended while the app was
-              // closed (or from another account), and replaying them rang
-              // the phone with nobody calling.
+              // SG: replaying a saved call rang the phone with nobody calling.
+              // Two checks keep that from happening:
+              //  1. Only an unanswered call expires with its ring window. An
+              //     answered one must still open, however slowly the app starts.
+              //  2. The call must have been made to the account logged in now,
+              //     so a call left over from another account never rings.
               final ageMs =
                   DateTime.now().millisecondsSinceEpoch -
                   offlineCallKitCacheParameter.datetime;
-              if (ageMs > offlineCallKitCacheParameter.timeoutSeconds * 1000) {
+              final expired =
+                  !offlineCallKitCacheParameter.accept &&
+                  ageMs > offlineCallKitCacheParameter.timeoutSeconds * 1000;
+              final forThisUser = offlineCallKitCacheParameter.invitees.any(
+                (invitee) => invitee.id == userID,
+              );
+              if (expired || !forThisUser) {
                 ZegoLoggerService.logInfo(
-                  'skip expired offline call, age:${ageMs}ms',
+                  'skip saved call, expired:$expired, '
+                  'forThisUser:$forThisUser, age:${ageMs}ms',
                   tag: 'call-invitation',
                   subTag:
                       'service private(${identityHashCode(this)}), init plugins',
