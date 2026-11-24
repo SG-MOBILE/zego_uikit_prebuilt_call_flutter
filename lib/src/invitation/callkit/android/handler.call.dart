@@ -136,6 +136,11 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
         );
 
         await clearAllCallKitCalls();
+
+        // SG: also forget the saved call. Otherwise opening the app within
+        // the ring window replays a call the caller already cancelled.
+        await ZegoUIKitCallCache().offlineCallKit.clearCacheParams();
+        await ZegoUIKitCallCache().offlineCallKit.clearCallID();
       }
     });
   }

@@ -605,25 +605,22 @@ class ZegoCallInvitationServicePrivateImpl
                 return;
               }
 
-              // SG: replaying a saved call rang the phone with nobody calling.
-              // Two checks keep that from happening:
-              //  1. Only an unanswered call expires with its ring window. An
-              //     answered one must still open, however slowly the app starts.
-              //  2. The call must have been made to the account logged in now,
-              //     so a call left over from another account never rings.
+              // SG: replay a saved call only if it is for the user logged in
+              // now and, when unanswered, still inside its ring window.
+              // Anything else is left over (another account, or a call that
+              // ended while the app was closed) and rang with nobody calling.
+              // An answered call never expires here: it must still open.
+              final saved = offlineCallKitCacheParameter;
+              final isForMe = ZegoCallInvitationSendRequestProtocol.fromJson(
+                saved.payloadData,
+              ).invitees.any((user) => user.id == _data?.userID);
               final ageMs =
-                  DateTime.now().millisecondsSinceEpoch -
-                  offlineCallKitCacheParameter.datetime;
+                  DateTime.now().millisecondsSinceEpoch - saved.datetime;
               final expired =
-                  !offlineCallKitCacheParameter.accept &&
-                  ageMs > offlineCallKitCacheParameter.timeoutSeconds * 1000;
-              final forThisUser = offlineCallKitCacheParameter.invitees.any(
-                (invitee) => invitee.id == userID,
-              );
-              if (expired || !forThisUser) {
+                  !saved.accept && ageMs > saved.timeoutSeconds * 1000;
+              if (!isForMe || expired) {
                 ZegoLoggerService.logInfo(
-                  'skip saved call, expired:$expired, '
-                  'forThisUser:$forThisUser, age:${ageMs}ms',
+                  'skip saved call, for me:$isForMe, age:${ageMs}ms',
                   tag: 'call-invitation',
                   subTag:
                       'service private(${identityHashCode(this)}), init plugins',
