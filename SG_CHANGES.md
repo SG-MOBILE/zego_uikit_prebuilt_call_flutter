@@ -12,3 +12,4 @@ Upgrading ZEGO means re-applying these on the new version.
 | Replay a saved call only if it is for this user and, if unanswered, still ringing | `mixins/private/private.dart` | Old calls rang on app start with nobody calling |
 | Saved call uses the invite's ring time (40 s), not a fixed 60 s | `callkit/android/handler.call.dart` | Matches the CRM |
 | Notification fallback without the overlay permission | `notification/notification_manager.dart` | Earlier fix (fb7586b) |
+| iOS: a cancel push ends the ring | `callkit/ios/entry_point.dart` | iOS rings for every VoIP push, the cancel too, and nothing ended it: rang after hang-up, and Accept opened a dead room |
