@@ -26,6 +26,7 @@ class ZegoUIKitOfflineCallKitCache {
   /// Retrieve the cached ID of the current call, which is stored in the handler received from ZPNS.
   Future<String?> getCallID() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload(); // SG: see getCacheParams
     return prefs.getString(callkitCalIDCacheKey);
   }
 
@@ -67,6 +68,11 @@ class ZegoUIKitOfflineCallKitCache {
   Future<ZegoCallInvitationOfflineCallKitCacheParameterProtocol>
   getCacheParams() async {
     final prefs = await SharedPreferences.getInstance();
+    // SG: on Android a killed app's Accept is saved here by the background
+    // isolate, while the app's own copy of these prefs was loaded at startup.
+    // Without a reload the app read "accept:false", rang in-app for a call
+    // that was already accepted, and never joined the room.
+    await prefs.reload();
     final jsonString = prefs.getString(callkitParamsCacheKey) ?? '';
 
     return ZegoCallInvitationOfflineCallKitCacheParameterProtocol.fromJson(
