@@ -2439,6 +2439,13 @@ class ZegoCallInvitationPageManager {
 
     if (_invitationTopSheetVisibility) {
       assert(callInvitationData.contextQuery != null);
+      // SG: a close done by code (accept, cancel, timeout) must not decline.
+      // The pop-up's close handler declines unless its own buttons were
+      // tapped, so Answer from our call notification sent a decline first and
+      // the accept then failed ("invitationID is empty"). This is the flag ZEGO
+      // already uses for its tap-outside case; a real back press still
+      // declines. Reset in `finally` so a failed pop can't leave it on.
+      isHidingInvitationTopSheetDuringSheetEmptyClicked = true;
       try {
         ZegoLoggerService.logInfo(
           'push from hideInvitationTopSheet, ',
@@ -2453,6 +2460,8 @@ class ZegoCallInvitationPageManager {
           tag: 'call-invitation',
           subTag: 'page manager, hideInvitationTopSheet',
         );
+      } finally {
+        isHidingInvitationTopSheetDuringSheetEmptyClicked = false;
       }
 
       _invitationTopSheetVisibility = false;
