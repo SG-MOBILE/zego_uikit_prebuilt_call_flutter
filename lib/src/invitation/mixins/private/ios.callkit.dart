@@ -387,7 +387,11 @@ class ZegoCallInvitationServiceIOSCallKitPrivatePrivateImpl {
       subTag: 'ios callkit, on callkit perform answer call action',
     );
     if (currentCallInvitationData.isEmpty) {
-      const checkMaxIterations = 10;
+      // SG: 50 x 200 ms = 10 s (was 2 s). On a killed phone the app logs in
+      // only after the push woke it (token request + ZIM login), and the call
+      // reaches us over ZIM after that. 2 s was too short, so Accept failed
+      // and the caller kept ringing.
+      const checkMaxIterations = 50;
 
       /// At this point, iOS should have received an online notification
       /// Otherwise, wait
