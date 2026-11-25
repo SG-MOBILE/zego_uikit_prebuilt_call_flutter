@@ -273,9 +273,20 @@ class ZegoCallAndroidCallBackgroundMessageHandler {
             message.handlerInfo?.userName ?? '',
           );
 
-          await ZegoUIKit().joinRoom(callID, keepWakeScreen: false).then((_) {
-            ZegoUIKit().turnMicrophoneOn(true);
-          });
+          // SG: pass the token. We sign in with tokens (no app sign), and ZEGO
+          // sent this join without one, so it failed (1002067). The app then
+          // opened the call with a faked join (isSimulated in call.dart), was
+          // never really in the room, hung up after 2 s (required inviter not
+          // found) and the caller got no signal that the call had ended.
+          await ZegoUIKit()
+              .joinRoom(
+                callID,
+                token: message.handlerInfo?.token ?? '',
+                keepWakeScreen: false,
+              )
+              .then((_) {
+                ZegoUIKit().turnMicrophoneOn(true);
+              });
         });
   }
 
