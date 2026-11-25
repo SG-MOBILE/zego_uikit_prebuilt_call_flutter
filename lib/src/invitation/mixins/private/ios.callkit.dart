@@ -459,6 +459,23 @@ class ZegoCallInvitationServiceIOSCallKitPrivatePrivateImpl {
       if (ZegoUIKitPrebuiltCallInvitationService().isInCalling) {
         /// exit call
         await ZegoCallKitBackgroundService().handUpCurrentCallByCallKit();
+      } else if (ZegoUIKitPrebuiltCallInvitationService()
+          .private
+          .currentCallInvitationDataSafe
+          .isEmpty) {
+        // SG: Decline before the call arrived. On a killed iPhone the app is
+        // still logging in, so ZEGO doesn't have the call yet. ZEGO's code
+        // below cleared the saved call ID and sent a refusal with empty IDs:
+        // the counselor kept ringing, and when the call arrived a moment
+        // later ZEGO didn't recognise it and rang the phone again. Instead we
+        // keep the saved call ID (so ZEGO recognises the call) and ask the
+        // page manager to refuse it when it arrives.
+        ZegoLoggerService.logInfo(
+          'declined before the call arrived, refusing it on arrival',
+          tag: 'call-invitation',
+          subTag: 'ios callkit, perform end call call action',
+        );
+        ZegoCallKitBackgroundService().refuseWhenInvitationArrives();
       } else {
         /// There is no need to clear CallKit here;  manually clear the CallKit ID.
         ///

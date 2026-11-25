@@ -6,6 +6,7 @@ import 'package:zego_uikit/zego_uikit.dart';
 
 // Project imports:
 import 'package:zego_uikit_prebuilt_call/src/invitation/cache/cache.dart';
+import 'package:zego_uikit_prebuilt_call/src/invitation/callkit/background_service.dart';
 import 'package:zego_uikit_prebuilt_call/src/invitation/callkit/ios/handler.dart';
 
 String? iOSIncomingPushUUID;
@@ -64,6 +65,10 @@ void onIncomingPushReceived(Map<dynamic, dynamic> extras, String uuid) async {
     );
     return;
   }
+
+  // SG: a new call starts clean. A Decline saved for an earlier call that
+  // never arrived must not refuse this one.
+  ZegoCallKitBackgroundService().clearPendingRefusal();
 
   iOSIncomingPushUUID = uuid;
   if (callID.isNotEmpty) _ringByCallID[callID] = uuid;

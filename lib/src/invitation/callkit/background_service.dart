@@ -79,6 +79,11 @@ class ZegoCallKitBackgroundService {
 
   ZegoCallInvitationPageManager? _pageManager;
 
+  // SG: true when the student declined on CallKit before ZEGO's init made
+  // the page manager. The flag can't be set on a page manager that doesn't
+  // exist yet, so it waits here and is handed over in register().
+  bool _refuseOnArrival = false;
+
   bool _iOSCallKitDisplaying = false;
   final _iOSCallKitHangupOperation = IOSCallKitHangupOperation();
 
@@ -90,6 +95,38 @@ class ZegoCallKitBackgroundService {
     );
 
     _pageManager = pageManager;
+
+    // SG: hand over a Decline tapped before init. register() runs before the
+    // ZIM login, so the flag is in place before the call can arrive. Cleared
+    // here so it can never refuse a later call.
+    if (_refuseOnArrival) {
+      _refuseOnArrival = false;
+      pageManager.waitingCallInvitationReceivedAfterCallKitIncomingRejected =
+          true;
+    }
+  }
+
+  /// SG: Decline was tapped on a killed iPhone before ZEGO had the call
+  /// (the app was still logging in). Refusing now would send empty IDs that
+  /// reach nobody, so the counselor kept ringing. Instead the page manager
+  /// refuses the call when it arrives over ZIM (page_manager.dart, the
+  /// "refuse invitation by callkit rejected" branch).
+  void refuseWhenInvitationArrives() {
+    final pageManager = _pageManager;
+    if (pageManager == null) {
+      _refuseOnArrival = true; // ZEGO's init hasn't run yet
+    } else {
+      pageManager.waitingCallInvitationReceivedAfterCallKitIncomingRejected =
+          true;
+    }
+  }
+
+  /// SG: a new incoming call must not inherit a refusal meant for an
+  /// earlier call that never arrived (for example, it was cancelled).
+  void clearPendingRefusal() {
+    _refuseOnArrival = false;
+    _pageManager?.waitingCallInvitationReceivedAfterCallKitIncomingRejected =
+        false;
   }
 
   void acceptInvitationInBackground() {
